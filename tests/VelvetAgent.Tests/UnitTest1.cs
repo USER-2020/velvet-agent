@@ -36,5 +36,28 @@ public class AgentTests
     [WindowsFact] public async Task WindowsDpapiRoundTrip() { var path = Temp(); try { var s = new PlatformSecretStore(path); await s.WriteAsync("test-credential", default); Assert.Equal("test-credential", await s.ReadAsync(default)); Assert.DoesNotContain("test-credential", await File.ReadAllTextAsync(Path.Combine(path, "credential.dpapi"))); await s.DeleteAsync(default); Assert.Null(await s.ReadAsync(default)); } finally { Directory.Delete(path, true); } }
     [Fact] public async Task ConfigurationPersistsAndValidates() { var path = Temp(); try { var state = new LocalState(path); var original = new AgentConfiguration("https://master.example", 15); Assert.Equal(original, await state.ConfigurationAsync(original)); Assert.Equal(original, await state.ConfigurationAsync(new())); await File.WriteAllTextAsync(Path.Combine(path, "configuration.json"), "{\"MasterUrl\":\"http://unsafe\",\"HeartbeatSeconds\":30}"); await Assert.ThrowsAsync<ArgumentException>(() => state.ConfigurationAsync(new())); } finally { Directory.Delete(path, true); } }
     [Fact] public async Task CommandsPersistReplayProtection() { var path = Temp(); try { var master = new DevelopmentMasterClient(); int effects = 0; var command = new AgentCommand(Guid.NewGuid(), "RefreshStatus", DateTimeOffset.UtcNow.AddMinutes(1)); Task Effect(CancellationToken _) { effects++; return Task.CompletedTask; } var first = await new CommandExecutor(path, master).ExecuteAsync(command, Effect, default); var repeated = await new CommandExecutor(path, master).ExecuteAsync(command, Effect, default); Assert.True(first.Success); Assert.Equal(first, repeated); Assert.Equal(1, effects); var denied = await new CommandExecutor(path, master).ExecuteAsync(new(Guid.NewGuid(), "shell", DateTimeOffset.UtcNow.AddMinutes(1)), Effect, default); Assert.False(denied.Success); Assert.Equal(1, effects); } finally { Directory.Delete(path, true); } }
-    [Fact] public async Task NamedPipeExchangesVersionedStatus() { var path = Temp(); var pipeName = "v"; try { var runtime = new AgentRuntime(new(path), new MetricsProvider(), new ProcessObsController(), new DevelopmentMasterClient(), new Secret(), new(Development: true)); await runtime.InitializeAsync(default); using var server = new LocalServer(runtime, Microsoft.Extensions.Logging.Abstractions.NullLogger<LocalServer>.Instance, pipeName); await server.StartAsync(default); try { using var client = new System.IO.Pipes.NamedPipeClientStream(".", pipeName, System.IO.Pipes.PipeDirection.InOut, System.IO.Pipes.PipeOptions.Asynchronous); await client.ConnectAsync(3000); using var writer = new StreamWriter(client, leaveOpen: true) { AutoFlush = true }; using var reader = new StreamReader(client, leaveOpen: true); await writer.WriteLineAsync(JsonSerializer.Serialize(new LocalRequest(1, "GetAgentStatus"))); var response = JsonDocument.Parse((await reader.ReadLineAsync())!); Assert.True(response.RootElement.GetProperty("Success").GetBoolean()); Assert.Equal("development-adapter", response.RootElement.GetProperty("Data").GetProperty("Mode").GetString()); } finally { await server.StopAsync(default); } } finally { Directory.Delete(path, true); } }
+    [Fact] public async Task NamedPipeExchangesVersionedStatus()
+    {
+        var path = Temp();
+        var pipeName = "v";
+        try
+        {
+            var runtime = new AgentRuntime(new(path), new MetricsProvider(), new ProcessObsController(), new DevelopmentMasterClient(), new Secret(), new(Development: true));
+            await runtime.InitializeAsync(default);
+            using var server = new LocalServer(runtime, Microsoft.Extensions.Logging.Abstractions.NullLogger<LocalServer>.Instance, pipeName);
+            await server.StartAsync(default);
+            using (var client = new System.IO.Pipes.NamedPipeClientStream(".", pipeName, System.IO.Pipes.PipeDirection.InOut, System.IO.Pipes.PipeOptions.Asynchronous))
+            {
+                await client.ConnectAsync(3000);
+                using var writer = new StreamWriter(client, leaveOpen: true) { AutoFlush = true };
+                using var reader = new StreamReader(client, leaveOpen: true);
+                await writer.WriteLineAsync(JsonSerializer.Serialize(new LocalRequest(1, "GetAgentStatus")));
+                var response = JsonDocument.Parse((await reader.ReadLineAsync())!);
+                Assert.True(response.RootElement.GetProperty("Success").GetBoolean());
+                Assert.Equal("development-adapter", response.RootElement.GetProperty("Data").GetProperty("Mode").GetString());
+            }
+            await server.StopAsync(default);
+        }
+        finally { Directory.Delete(path, true); }
+    }
 }
