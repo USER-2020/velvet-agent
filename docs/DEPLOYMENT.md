@@ -1,0 +1,33 @@
+# Despliegue Windows
+
+CI corre en macOS y Windows; release se dispara por tag `v*` o workflow_dispatch en windows-latest. Configurar versión idéntica en package.json, Cargo.toml y tauri.conf.json antes del tag; el workflow usa package.json para MSI y rechaza tags diferentes. Requiere permiso contents:write para crear Release. No se han disparado workflows ni publicado releases desde esta sesión.
+
+El build publica .NET autocontenido win-x64 en archivo único con librerías nativas incluidas y Desktop Tauri sin su instalador individual. WiX 6 empaqueta ambos, registra LocalService con inicio automático y recuperación tras fallo, crea acceso en Inicio y soporta MajorUpgrade. Mantiene UpgradeCode estable y GUID de componentes. No borra el perfil de LocalService ni credenciales al desinstalar. No hay arranque automático de Desktop: abrir desde Inicio; cierre oculta en bandeja.
+
+Prerequisito externo: Microsoft Edge WebView2 Runtime instalado. Este MSI no lo descarga ni lo incorpora. Verificarlo antes de instalar. El MSI es x64 y sin firma; no asumir que Windows SmartScreen confiará en él.
+
+Configuración productiva del servicio: definir variables del servicio en `HKLM\SYSTEM\CurrentControlSet\Services\VelvetAgent` valor MULTI_SZ `Environment` con `VELVET_MASTER_URL=https://...` y opcional `VELVET_HEARTBEAT_SECONDS=30`; reiniciar servicio. No poner tokens allí. Por defecto datos en LocalApplicationData de LocalService, normalmente `C:\Windows\ServiceProfiles\LocalService\AppData\Local\VelvetAgent`. Verificar ruta efectiva y ACL en la estación. Alternativamente usar VELVET_DATA_DIR con permisos exclusivos para LocalService y administradores. No cambiar identidad del servicio después del enrolamiento: DPAPI CurrentUser no se podrá descifrar bajo otra cuenta.
+
+Enrolar abriendo Desktop como administrador. Validar acceso efectivo al pipe, ingresar token de un uso generado por Master. No existe endpoint Master confirmado; el enrolamiento productivo es pendiente. La configuración se lee desde el archivo y variables al inicio; cambiar URL requiere reiniciar. Master no puede ejecutar shell ni actualizar binarios por sí solo.
+
+Firma futura: reservar secretos `WINDOWS_CERTIFICATE_BASE64`, `WINDOWS_CERTIFICATE_PASSWORD` y variable `WINDOWS_TIMESTAMP_URL` en un environment protegido de GitHub. No se consumen actualmente ni se presume certificado. Antes de habilitar firma, importar certificado temporalmente, firmar Service y Desktop con signtool SHA256 + timestamp HTTPS, construir MSI, firmarlo y verificar Authenticode y cadena del editor. Solo entonces cambiar nombre del artefacto unsigned. No incluir contraseñas en logs. SHA256SUMS actual no sustituye Authenticode.
+
+## Matriz manual obligatoria
+
+1. Instalar MSI elevado en Windows x64 limpio con WebView2; comprobar archivos y servicio LocalService.
+2. Reiniciar Windows: servicio inicia sin Desktop ni sesión interactiva. Verificar heartbeat y UUID persistente.
+3. Abrir Desktop estándar: leer estado real; enrolamiento debe rechazarse. Abrir elevado: enrolar con token válido; rechazar token caducado/consumido.
+4. `Stop-Service VelvetAgent`, verificar desconexión visible; `Start-Service VelvetAgent`, verificar reconexión automática.
+5. Cortar/restaurar red: estado offline, reintentos sin secretos en logs, recuperación conservando UUID.
+6. Revocar dispositivo en Master: 401/403, credencial eliminada, reenrolamiento explícito.
+7. Abrir OBS en usuario interactivo: detectar proceso, consultar escenas/streaming; rechazar autenticación pendiente. No cambiar escena ni transmitir automáticamente.
+8. Probar pipe desde usuario remoto y rechazar; mensajes de versión inválida, desconocidos, grandes y lentos no deben ejecutar acciones.
+9. Actualizar MSI con versión superior; preservar UUID/configuración/DPAPI; impedir downgrade. Verificar que se detiene servicio anterior antes de reemplazar.
+10. Desinstalar: servicio y archivos de programa desaparecen; datos operativos permanecen. Reinstalar: confirmar política de identidad persistente.
+11. Probar reinicio tras fallo y permisos sobre datos bajo cuenta LocalService. Revisar logs del SCM y del instalador.
+
+No hay evidencia de ejecución de esta matriz todavía. No etiquetar instalador como validado ni firmado.
+
+Referencia de configuración de recuperación del servicio: https://docs.firegiant.com/wix/schema/util/serviceconfig/
+
+WiX 6.0.2 se fija en el pipeline para reproducibilidad. Revisar sus condiciones de mantenimiento comercial antes de distribuir el instalador: https://www.nuget.org/packages/wix/6.0.2 (Open Source Maintenance Fee del proveedor).

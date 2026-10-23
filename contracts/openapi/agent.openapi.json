@@ -1,0 +1,572 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "VELVET Master Agent API \u2014 PROPUESTA",
+    "version": "0.1.0",
+    "description": "Contrato pendiente de implementar en Laravel. JSON camelCase; IPC usa PascalCase."
+  },
+  "servers": [
+    {
+      "url": "https://master.example.invalid"
+    }
+  ],
+  "paths": {
+    "/api/agent/enroll": {
+      "post": {
+        "operationId": "enroll",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollmentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Solicitud inv\u00e1lida"
+          },
+          "401": {
+            "description": "Credencial ausente o revocada"
+          },
+          "403": {
+            "description": "Permiso insuficiente"
+          },
+          "429": {
+            "description": "L\u00edmite excedido"
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnrollmentRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/heartbeat": {
+      "post": {
+        "operationId": "heartbeat",
+        "security": [
+          {
+            "deviceBearer": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Solicitud inv\u00e1lida"
+          },
+          "401": {
+            "description": "Credencial ausente o revocada"
+          },
+          "403": {
+            "description": "Permiso insuficiente"
+          },
+          "429": {
+            "description": "L\u00edmite excedido"
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentHeartbeat"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/configuration": {
+      "get": {
+        "operationId": "configuration",
+        "security": [
+          {
+            "deviceBearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentConfiguration"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Solicitud inv\u00e1lida"
+          },
+          "401": {
+            "description": "Credencial ausente o revocada"
+          },
+          "403": {
+            "description": "Permiso insuficiente"
+          },
+          "429": {
+            "description": "L\u00edmite excedido"
+          }
+        }
+      }
+    },
+    "/api/agent/events": {
+      "post": {
+        "operationId": "events",
+        "security": [
+          {
+            "deviceBearer": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Solicitud inv\u00e1lida"
+          },
+          "401": {
+            "description": "Credencial ausente o revocada"
+          },
+          "403": {
+            "description": "Permiso insuficiente"
+          },
+          "429": {
+            "description": "L\u00edmite excedido"
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentEvent"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/commands/{id}/result": {
+      "post": {
+        "operationId": "commands_ById_result",
+        "security": [
+          {
+            "deviceBearer": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Solicitud inv\u00e1lida"
+          },
+          "401": {
+            "description": "Credencial ausente o revocada"
+          },
+          "403": {
+            "description": "Permiso insuficiente"
+          },
+          "429": {
+            "description": "L\u00edmite excedido"
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommandExecutionResult"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "deviceBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    },
+    "schemas": {
+      "StationIdentity": {
+        "type": "object",
+        "properties": {
+          "installationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "hostname": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "installationId",
+          "hostname"
+        ]
+      },
+      "EnrollmentRequest": {
+        "type": "object",
+        "properties": {
+          "installationId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "hostname": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "installationId",
+          "hostname",
+          "token"
+        ]
+      },
+      "EnrollmentResponse": {
+        "type": "object",
+        "properties": {
+          "deviceToken": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "deviceToken"
+        ]
+      },
+      "AgentConfiguration": {
+        "type": "object",
+        "properties": {
+          "masterUrl": {
+            "type": "string",
+            "format": "uri",
+            "pattern": "^https://"
+          },
+          "heartbeatSeconds": {
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 3600
+          },
+          "development": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "masterUrl",
+          "heartbeatSeconds",
+          "development"
+        ]
+      },
+      "SystemMetrics": {
+        "type": "object",
+        "properties": {
+          "hostname": {
+            "type": "string"
+          },
+          "operatingSystem": {
+            "type": "string"
+          },
+          "architecture": {
+            "type": "string"
+          },
+          "cpuCount": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "cpuPercent": {
+            "type": "number",
+            "nullable": true
+          },
+          "ramTotalBytes": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "ramAvailableBytes": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "ramUsedPercent": {
+            "type": "number",
+            "nullable": true
+          },
+          "diskAvailableBytes": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          }
+        },
+        "required": [
+          "hostname",
+          "operatingSystem",
+          "architecture",
+          "cpuCount",
+          "cpuPercent",
+          "ramTotalBytes",
+          "ramAvailableBytes",
+          "ramUsedPercent",
+          "diskAvailableBytes"
+        ]
+      },
+      "ObsStatus": {
+        "type": "object",
+        "properties": {
+          "processRunning": {
+            "type": "boolean"
+          },
+          "webSocketConnected": {
+            "type": "boolean"
+          },
+          "streaming": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "currentScene": {
+            "type": "string",
+            "nullable": true
+          },
+          "scenes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "processRunning",
+          "webSocketConnected",
+          "streaming",
+          "currentScene",
+          "scenes",
+          "error"
+        ]
+      },
+      "AgentStatus": {
+        "type": "object",
+        "properties": {
+          "identity": {
+            "$ref": "#/components/schemas/StationIdentity"
+          },
+          "enrollment": {
+            "type": "integer",
+            "enum": [
+              0,
+              1,
+              2
+            ],
+            "description": "0=NotEnrolled,1=Enrolled,2=Revoked"
+          },
+          "masterConnected": {
+            "type": "boolean"
+          },
+          "lastSync": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "version": {
+            "type": "string"
+          },
+          "uptimeSeconds": {
+            "type": "number"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/SystemMetrics"
+          },
+          "obs": {
+            "$ref": "#/components/schemas/ObsStatus"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "development-adapter",
+              "master-api"
+            ]
+          }
+        },
+        "required": [
+          "identity",
+          "enrollment",
+          "masterConnected",
+          "lastSync",
+          "version",
+          "uptimeSeconds",
+          "metrics",
+          "obs",
+          "mode"
+        ]
+      },
+      "AgentHeartbeat": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sentAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "$ref": "#/components/schemas/AgentStatus"
+          }
+        },
+        "required": [
+          "id",
+          "sentAt",
+          "status"
+        ]
+      },
+      "AgentEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "at",
+          "kind",
+          "message"
+        ]
+      },
+      "AgentCommand": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "operation": {
+            "type": "string",
+            "enum": [
+              "RefreshStatus"
+            ]
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "operation",
+          "expiresAt"
+        ]
+      },
+      "CommandExecutionResult": {
+        "type": "object",
+        "properties": {
+          "commandId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "success": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "commandId",
+          "success",
+          "message"
+        ]
+      }
+    }
+  }
+}

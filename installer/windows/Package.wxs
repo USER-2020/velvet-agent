@@ -1,0 +1,18 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+ <Package Name="VELVET Agent" Manufacturer="THE VELVET STUDIO" Version="$(ProductVersion)" UpgradeCode="7E17BF51-5ED5-4CFD-BA74-91389C6B4F91" Scope="perMachine">
+  <MajorUpgrade DowngradeErrorMessage="Existe una versión más reciente de VELVET Agent." Schedule="afterInstallInitialize"/>
+  <MediaTemplate EmbedCab="yes"/>
+  <StandardDirectory Id="ProgramFiles64Folder"><Directory Id="INSTALLFOLDER" Name="VELVET Agent">
+   <Component Id="ServiceComponent" Guid="A1BD2C9C-C53D-43F9-ABCC-C3EE366C781A">
+    <File Id="ServiceExe" Source="$(ServiceDir)/VelvetAgent.Service.exe" KeyPath="yes"/>
+    <ServiceInstall Id="AgentService" Name="VelvetAgent" DisplayName="VELVET Agent Service" Type="ownProcess" Start="auto" ErrorControl="normal" Account="NT AUTHORITY\LocalService" Arguments="" Description="Monitoreo local de estaciones VELVET">
+     <util:ServiceConfig FirstFailureActionType="restart" SecondFailureActionType="restart" ThirdFailureActionType="restart" RestartServiceDelayInSeconds="30" ResetPeriodInDays="1"/>
+    </ServiceInstall>
+    <ServiceControl Id="Control" Name="VelvetAgent" Start="install" Stop="both" Remove="uninstall" Wait="yes"/>
+   </Component>
+   <Component Id="DesktopComponent" Guid="7AC690E7-B8E6-477D-962B-8F63C856DBD6"><File Id="DesktopExe" Source="$(DesktopExe)" KeyPath="yes"/></Component>
+  </Directory></StandardDirectory>
+  <StandardDirectory Id="ProgramMenuFolder"><Directory Id="MenuFolder" Name="VELVET Agent"><Component Id="Menu" Guid="D21A2F94-145A-4F83-8CA1-44012DE4E296"><Shortcut Id="DesktopShortcut" Name="VELVET Agent" Target="[#DesktopExe]" WorkingDirectory="INSTALLFOLDER"/><RemoveFolder Id="RemoveMenu" On="uninstall"/><RegistryValue Root="HKLM" Key="Software\VelvetAgent" Name="Installed" Type="integer" Value="1" KeyPath="yes"/></Component></Directory></StandardDirectory>
+  <Feature Id="Agent" Title="VELVET Agent" Level="1"><ComponentRef Id="ServiceComponent"/><ComponentRef Id="DesktopComponent"/><ComponentRef Id="Menu"/></Feature>
+ </Package>
+</Wix>

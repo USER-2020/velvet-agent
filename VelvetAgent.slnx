@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/VelvetAgent.Core/VelvetAgent.Core.csproj" />
+    <Project Path="src/VelvetAgent.Infrastructure/VelvetAgent.Infrastructure.csproj" />
+    <Project Path="src/VelvetAgent.Service/VelvetAgent.Service.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/VelvetAgent.Tests/VelvetAgent.Tests.csproj" />
+  </Folder>
+</Solution>
