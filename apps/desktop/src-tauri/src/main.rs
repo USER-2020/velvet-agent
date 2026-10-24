@@ -301,15 +301,13 @@ async fn oauth_login(
     Ok(json!({"Authenticated":true,"AccessExpiresIn":access_seconds}))
 }
 fn open_browser(target: &str) -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    let mut command = std::process::Command::new("open");
     #[cfg(target_os = "windows")]
-    let mut command = {
+    {
         let mut c = std::process::Command::new("cmd");
         c.args(["/C", "start", "", target]);
         return c
             .status()
-            .map_err(|_| "No se pudo abrir el navegador")
+            .map_err(|_| "No se pudo abrir el navegador".to_string())
             .and_then(|s| {
                 if s.success() {
                     Ok(())
@@ -317,20 +315,33 @@ fn open_browser(target: &str) -> Result<(), String> {
                     Err("No se pudo abrir el navegador".into())
                 }
             });
-    };
+    }
+
+    #[cfg(target_os = "macos")]
+    let mut command = std::process::Command::new("open");
     #[cfg(target_os = "linux")]
     let mut command = std::process::Command::new("xdg-open");
-    command
-        .arg(target)
-        .status()
-        .map_err(|_| "No se pudo abrir el navegador".to_string())
-        .and_then(|s| {
-            if s.success() {
-                Ok(())
-            } else {
-                Err("No se pudo abrir el navegador".into())
-            }
-        })
+
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    {
+        command
+            .arg(target)
+            .status()
+            .map_err(|_| "No se pudo abrir el navegador".to_string())
+            .and_then(|s| {
+                if s.success() {
+                    Ok(())
+                } else {
+                    Err("No se pudo abrir el navegador".into())
+                }
+            })
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    {
+        let _ = target;
+        Err("Sistema operativo no compatible para abrir el navegador".into())
+    }
 }
 fn random_session_id() -> String {
     let hex = format!("{:032x}", rand::random::<u128>());
