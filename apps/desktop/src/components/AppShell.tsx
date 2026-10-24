@@ -45,25 +45,30 @@ export function Sidebar({
         </span>
       </div>
       {roleLabel(userRole) && (
-        <div className="sidebar-role-badge" aria-label={`Rol: ${roleLabel(userRole)}`}>
+        <div
+          className="sidebar-role-badge"
+          aria-label={`Rol: ${roleLabel(userRole)}`}
+        >
           {roleLabel(userRole)}
         </div>
       )}
       <div className="nav-caption">ESPACIO DE TRABAJO</div>
       <nav aria-label="Navegación principal">
-        {navigation.filter(({ id }) => id !== 'settings' || canConfigure).map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            className={`nav-item ${page === id ? 'is-active' : ''}`}
-            aria-current={page === id ? 'page' : undefined}
-            onClick={() => onNavigate(id)}
-            title={label}
-            aria-label={label}
-          >
-            <Icon size={18} />
-            <span>{label}</span>
-          </button>
-        ))}
+        {navigation
+          .filter(({ id }) => id !== 'settings' || canConfigure)
+          .map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              className={`nav-item ${page === id ? 'is-active' : ''}`}
+              aria-current={page === id ? 'page' : undefined}
+              onClick={() => onNavigate(id)}
+              title={label}
+              aria-label={label}
+            >
+              <Icon size={18} />
+              <span>{label}</span>
+            </button>
+          ))}
       </nav>
       <div className="sidebar-bottom">
         <div className="privacy-note">
@@ -103,7 +108,9 @@ export function TopBar({
         <span className="station-dot" />
         <span>{hostname}</span>
         <small>ESTACIÓN</small>
-        {roleLabel(userRole) && <small className="topbar-role">{roleLabel(userRole)}</small>}
+        {roleLabel(userRole) && (
+          <small className="topbar-role">{roleLabel(userRole)}</small>
+        )}
       </div>
       <StatusIndicator
         label={

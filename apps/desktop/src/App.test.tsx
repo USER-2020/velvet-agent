@@ -26,6 +26,7 @@ const status: Status = {
   Version: '0.1.0',
   UptimeSeconds: 120,
   Mode: 'development-adapter',
+  ConfigurationAvailable: true,
   Metrics: {
     Hostname: 'test-station',
     OperatingSystem: 'test-os',

@@ -188,7 +188,11 @@ export default function App() {
   async function toggleObsStreaming() {
     if (!obs?.WebSocketConnected || obs.Streaming == null) return;
     const start = !obs.Streaming;
-    if (start && !window.confirm('¿Quieres iniciar la transmisión configurada en OBS?')) return;
+    if (
+      start &&
+      !window.confirm('¿Quieres iniciar la transmisión configurada en OBS?')
+    )
+      return;
     setBusy(true);
     setObsError(false);
     try {
@@ -240,15 +244,21 @@ export default function App() {
     if (!config || !status) return;
     setBusy(true);
     try {
-      await loginWithMaster(config, status.Identity.InstallationId, status.Identity.Hostname);
+      await loginWithMaster(
+        config,
+        status.Identity.InstallationId,
+        status.Identity.Hostname,
+      );
       setToast('Sesión de VELVET Master iniciada.');
       await refresh();
       setPage('dashboard');
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      setToast(message.includes('OAuth en curso')
-        ? 'Ya hay un inicio de sesión en curso. Completa la ventana de VELVET Master.'
-        : 'No se pudo iniciar sesión con VELVET Master.');
+      setToast(
+        message.includes('OAuth en curso')
+          ? 'Ya hay un inicio de sesión en curso. Completa la ventana de VELVET Master.'
+          : 'No se pudo iniciar sesión con VELVET Master.',
+      );
     } finally {
       setBusy(false);
     }
@@ -280,7 +290,9 @@ export default function App() {
     });
   }
   const authRequired =
-    !loading && status?.Mode === 'master-api' && status.UserAuthenticated === false;
+    !loading &&
+    status?.Mode === 'master-api' &&
+    status.UserAuthenticated === false;
   if (loading && !status) {
     return (
       <div className="auth-gate" role="status" aria-live="polite">
@@ -310,7 +322,9 @@ export default function App() {
             disabled={!connected || !config?.StudioId || busy}
           >
             <ArrowUpRight size={16} />
-            {busy ? 'Abriendo VELVET Master…' : 'Iniciar sesión con VELVET Master'}
+            {busy
+              ? 'Abriendo VELVET Master…'
+              : 'Iniciar sesión con VELVET Master'}
           </button>
           {!connected && <small>Esperando al servicio local…</small>}
           {!config?.StudioId && connected && (
@@ -479,7 +493,9 @@ export default function App() {
                     onClick={() => void toggleObsStreaming()}
                     disabled={busy || !obs?.WebSocketConnected}
                   >
-                    {obs?.Streaming ? 'Detener transmisión' : 'Iniciar transmisión'}
+                    {obs?.Streaming
+                      ? 'Detener transmisión'
+                      : 'Iniciar transmisión'}
                   </button>
                 </section>
                 <ObsStatusCard
@@ -569,7 +585,10 @@ export default function App() {
                     {busy ? 'Consultando…' : 'Consultar OBS'}
                   </button>
                 </div>
-                <p>Conexión local a OBS WebSocket. La transmisión requiere confirmación.</p>
+                <p>
+                  Conexión local a OBS WebSocket. La transmisión requiere
+                  confirmación.
+                </p>
                 {obsError && (
                   <div className="inline-warning" role="status">
                     OBS no respondió. Comprueba que esté abierto y que WebSocket
@@ -631,8 +650,9 @@ export default function App() {
                 )}
               </SettingsSection>
               <p className="helper">
-                <ShieldCheck size={15} /> Las claves RTMP permanecen en OBS. OBS con
-                contraseña aún requiere completar la autenticación del Agent.
+                <ShieldCheck size={15} /> Las claves RTMP permanecen en OBS. OBS
+                con contraseña aún requiere completar la autenticación del
+                Agent.
               </p>
             </>
           )}
@@ -675,7 +695,10 @@ export default function App() {
                 {status?.UserAuthenticated && (
                   <DeviceInfo
                     items={[
-                      ['Usuario', status.UserDisplayName ?? 'Sesión autorizada'],
+                      [
+                        'Usuario',
+                        status.UserDisplayName ?? 'Sesión autorizada',
+                      ],
                       ['Cuenta', status.UserId ?? 'Identificada en Master'],
                     ]}
                   />
@@ -683,11 +706,25 @@ export default function App() {
                 {(!status?.UserAuthenticated || !status.UserDisplayName) && (
                   <div className="enrollment-form">
                     <h3>Inicia sesión con VELVET Master</h3>
-                    <p>Autoriza tu cuenta desde el navegador oficial para preparar esta estación.</p>
-                    <button className="button" type="button" onClick={() => void loginMaster()} disabled={!connected || !config?.StudioId || busy}>
-                      Iniciar sesión con VELVET Master <ArrowUpRight size={15} />
+                    <p>
+                      Autoriza tu cuenta desde el navegador oficial para
+                      preparar esta estación.
+                    </p>
+                    <button
+                      className="button"
+                      type="button"
+                      onClick={() => void loginMaster()}
+                      disabled={!connected || !config?.StudioId || busy}
+                    >
+                      Iniciar sesión con VELVET Master{' '}
+                      <ArrowUpRight size={15} />
                     </button>
-                    {!config?.StudioId && <p className="helper">Configura VELVET_STUDIO_ID en el servicio para habilitar OAuth.</p>}
+                    {!config?.StudioId && (
+                      <p className="helper">
+                        Configura VELVET_STUDIO_ID en el servicio para habilitar
+                        OAuth.
+                      </p>
+                    )}
                   </div>
                 )}
                 <details>

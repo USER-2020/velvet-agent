@@ -132,18 +132,40 @@ export async function reportObsStatus(status: Obs): Promise<void> {
 export async function setObsStreaming(start: boolean): Promise<void> {
   await invoke('obs_set_streaming', { start });
   try {
-    const response: unknown = await invoke('agent_request', { operation: start ? 'StartTransmission' : 'StopTransmission', token: null });
-    if (!record(response) || response.Success !== true) throw Error(start ? 'Master no registró el inicio de transmisión' : 'Master no registró el fin de transmisión');
+    const response: unknown = await invoke('agent_request', {
+      operation: start ? 'StartTransmission' : 'StopTransmission',
+      token: null,
+    });
+    if (!record(response) || response.Success !== true)
+      throw Error(
+        start
+          ? 'Master no registró el inicio de transmisión'
+          : 'Master no registró el fin de transmisión',
+      );
   } catch (error) {
     if (start) {
-      try { await invoke('obs_set_streaming', { start: false }); } catch { /* conserva el error original */ }
+      try {
+        await invoke('obs_set_streaming', { start: false });
+      } catch {
+        /* conserva el error original */
+      }
     }
     throw error;
   }
 }
-export async function loginWithMaster(config: Config, installationId: string, hostname: string): Promise<void> {
-  if (!config.StudioId) throw Error('La estación no tiene StudioId configurado');
-  await invoke('oauth_login', { masterUrl: config.MasterUrl, installationId, hostname, studioId: config.StudioId });
+export async function loginWithMaster(
+  config: Config,
+  installationId: string,
+  hostname: string,
+): Promise<void> {
+  if (!config.StudioId)
+    throw Error('La estación no tiene StudioId configurado');
+  await invoke('oauth_login', {
+    masterUrl: config.MasterUrl,
+    installationId,
+    hostname,
+    studioId: config.StudioId,
+  });
 }
 export function connectionLabel(
   status: Status | null,
