@@ -49,8 +49,12 @@ public class AgentTests
             using (var client = new System.IO.Pipes.NamedPipeClientStream(".", pipeName, System.IO.Pipes.PipeDirection.InOut, System.IO.Pipes.PipeOptions.Asynchronous))
             {
                 await client.ConnectAsync(3000);
-                using var writer = new StreamWriter(client, leaveOpen: true) { AutoFlush = true };
-                using var reader = new StreamReader(client, leaveOpen: true);
+                // The server closes its end immediately after writing the response. Do not
+                // dispose StreamWriter afterwards: Dispose flushes once more and Windows
+                // reports the already-closed pipe as "Pipe is broken". The client stream
+                // owns the connection and closes it at the end of the block.
+                var writer = new StreamWriter(client, leaveOpen: true) { AutoFlush = true };
+                var reader = new StreamReader(client, leaveOpen: true);
                 await writer.WriteLineAsync(JsonSerializer.Serialize(new LocalRequest(1, "GetAgentStatus")));
                 var response = JsonDocument.Parse((await reader.ReadLineAsync())!);
                 Assert.True(response.RootElement.GetProperty("Success").GetBoolean());
