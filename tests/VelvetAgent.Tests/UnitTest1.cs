@@ -39,7 +39,7 @@ public class AgentTests
     [Fact] public async Task NamedPipeExchangesVersionedStatus()
     {
         var path = Temp();
-        var pipeName = "v";
+        var pipeName = "velvet-test-" + Guid.NewGuid().ToString("N");
         try
         {
             var runtime = new AgentRuntime(new(path), new MetricsProvider(), new ProcessObsController(), new DevelopmentMasterClient(), new Secret(), new(Development: true));

@@ -46,7 +46,16 @@ public sealed class LocalServer : BackgroundService
     static bool IsAdministrator(NamedPipeServerStream pipe)
     {
         bool admin = false;
-        pipe.RunAsClient(() => { using var user = WindowsIdentity.GetCurrent(true); admin = user is not null && new WindowsPrincipal(user).IsInRole(WindowsBuiltInRole.Administrator); });
+        try
+        {
+            pipe.RunAsClient(() => { using var user = WindowsIdentity.GetCurrent(true); admin = user is not null && new WindowsPrincipal(user).IsInRole(WindowsBuiltInRole.Administrator); });
+        }
+        catch (Exception)
+        {
+            // A client identity query must never terminate the pipe server. The
+            // request remains read-only when the identity cannot be inspected.
+            admin = false;
+        }
         return admin;
     }
     static NamedPipeServerStream CreatePipe(string pipeName)
