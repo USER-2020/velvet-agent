@@ -39,7 +39,11 @@ public class AgentTests
     [Fact] public async Task NamedPipeExchangesVersionedStatus()
     {
         var path = Temp();
-        var pipeName = "velvet-test-" + Guid.NewGuid().ToString("N");
+        // macOS maps named pipes to Unix-domain sockets and limits the full path
+        // to 104 characters; keep the test name short on that platform.
+        var pipeName = OperatingSystem.IsWindows()
+            ? "v" + Guid.NewGuid().ToString("N")[..8]
+            : "v";
         try
         {
             var runtime = new AgentRuntime(new(path), new MetricsProvider(), new ProcessObsController(), new DevelopmentMasterClient(), new Secret(), new(Development: true));
