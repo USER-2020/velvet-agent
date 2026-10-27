@@ -1,6 +1,6 @@
 # Despliegue Windows
 
-CI corre en macOS y Windows; release se dispara por tag `v*` o workflow_dispatch en windows-latest. Configurar versión idéntica en package.json, Cargo.toml y tauri.conf.json antes del tag; el workflow usa package.json para MSI y rechaza tags diferentes. Requiere permiso contents:write para crear Release. No se han disparado workflows ni publicado releases desde esta sesión.
+CI corre en macOS y Windows; el release de Windows se dispara únicamente con un push a `main` en `windows-latest`. El workflow toma el último tag `vX.Y.Z`, incrementa el patch, sincroniza package.json, Cargo.toml y tauri.conf.json, crea el commit/tag correspondiente y publica el MSI. Requiere permiso `contents:write` para actualizar `main`, crear el tag y publicar el Release. No se deben crear tags manuales para este flujo. Las demás ramas se validan mediante CI, pero no publican releases.
 
 El build publica .NET autocontenido win-x64 en archivo único con librerías nativas incluidas y Desktop Tauri sin su instalador individual. WiX 6 empaqueta ambos, registra LocalService con inicio automático y recuperación tras fallo, crea acceso en Inicio y soporta MajorUpgrade. Mantiene UpgradeCode estable y GUID de componentes. No borra el perfil de LocalService ni credenciales al desinstalar. No hay arranque automático de Desktop: abrir desde Inicio; cierre oculta en bandeja.
 

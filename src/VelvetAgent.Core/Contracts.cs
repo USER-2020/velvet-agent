@@ -8,7 +8,7 @@ public record AgentConfiguration(string MasterUrl = "https://localhost", int Hea
     public string? StudioId { get; init; }
     public void Validate()
     {
-        if (!Uri.TryCreate(MasterUrl, UriKind.Absolute, out var uri) || uri.Scheme != "https" || !string.IsNullOrEmpty(uri.UserInfo)) throw new ArgumentException("Master requiere HTTPS sin credenciales en URL");
+        if (!Uri.TryCreate(MasterUrl, UriKind.Absolute, out var uri) || uri.Scheme != "https" || !string.IsNullOrEmpty(uri.UserInfo) || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment) || (uri.AbsolutePath != "/" && !string.IsNullOrEmpty(uri.AbsolutePath))) throw new ArgumentException("Master requiere únicamente un dominio HTTPS, sin ruta ni credenciales");
         if (HeartbeatSeconds is < 5 or > 3600) throw new ArgumentException("Intervalo permitido: 5–3600 segundos");
     }
 }

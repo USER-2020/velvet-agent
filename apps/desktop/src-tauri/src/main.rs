@@ -72,10 +72,8 @@ async fn oauth_login(
     let _guard = lock
         .try_lock()
         .map_err(|_| "Ya hay un inicio de sesión OAuth en curso".to_string())?;
-    let mut base = Url::parse(&master_url).map_err(|_| "URL de Master inválida")?;
-    if base.scheme() != "https" {
-        return Err("Master requiere HTTPS".into());
-    }
+    let master_origin = normalize_master_url(&master_url)?;
+    let mut base = Url::parse(&master_origin).map_err(|_| "URL de Master inválida")?;
     let listener = TcpListener::bind("127.0.0.1:0")
         .await
         .map_err(|_| "No se pudo abrir callback local")?;
@@ -89,7 +87,7 @@ async fn oauth_login(
     let verifier = URL_SAFE_NO_PAD.encode(verifier_bytes);
     let state = URL_SAFE_NO_PAD.encode(rand::random::<[u8; 32]>());
     let challenge = URL_SAFE_NO_PAD.encode(sha2::Sha256::digest(verifier.as_bytes()));
-    base.set_path("oauth/agent/authorize");
+    base.set_path("/oauth/agent/authorize");
     base.query_pairs_mut()
         .append_pair("client_id", "velvet-agent")
         .append_pair("redirect_uri", &redirect)
@@ -160,7 +158,7 @@ async fn oauth_login(
         })?;
     let response = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n<!doctype html><meta charset=\"utf-8\"><title>VELVET Agent</title><p>Autenticación completada. Puedes volver a VELVET Agent.</p><script>window.close()</script>";
     let _ = stream.write_all(response.as_bytes()).await;
-    let token_url = format!("{}/api/agent/oauth/token", master_url.trim_end_matches('/'));
+    let token_url = format!("{master_origin}/api/agent/oauth/token");
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(20))
         .build()
@@ -206,7 +204,7 @@ async fn oauth_login(
     // Obtiene el usuario asociado al token para que el servicio pueda exponerlo
     // al Desktop en GetAgentStatus y la sesión no quede como un simple booleano.
     let me: Value = client
-        .get(format!("{}/api/agent/me", master_url.trim_end_matches('/')))
+        .get(format!("{master_origin}/api/agent/me"))
         .bearer_auth(&tokens.access_token)
         .send()
         .await
@@ -217,11 +215,23 @@ async fn oauth_login(
         .await
         .map_err(|_| "Respuesta de usuario inválida")?;
     let user = me.get("user").ok_or("Master no devolvió el usuario")?;
-    let station_id = me
-        .get("station")
-        .and_then(|s| s.get("id"))
+    let station_response: Value = client
+        .get(format!("{master_origin}/api/agent/station"))
+        .bearer_auth(&tokens.access_token)
+        .send()
+        .await
+        .map_err(|_| "No se pudo consultar la estación en Master")?
+        .error_for_status()
+        .map_err(|_| "Master rechazó la consulta de la estación")?
+        .json()
+        .await
+        .map_err(|_| "Respuesta de estación inválida")?;
+    let station = station_response.get("station").unwrap_or(&station_response);
+    let station_id = station
+        .get("id")
         .and_then(Value::as_i64)
-        .ok_or("Master no devolvió la estación")?;
+        .ok_or("Master no devolvió el identificador de estación")?;
+    validate_station(station, &installation_id, &studio_id)?;
     // Laravel serializa el identificador como número; aceptar también texto
     // evita perder la asociación usuario–estación al guardar la sesión.
     let user_id = user
@@ -249,6 +259,12 @@ async fn oauth_login(
                 .collect()
         })
         .unwrap_or_default();
+    if !permissions
+        .iter()
+        .any(|permission| permission == "stations.connect")
+    {
+        return Err("El usuario no tiene permiso stations.connect".into());
+    }
     let roles: Vec<String> = user
         .get("roles")
         .and_then(Value::as_array)
@@ -287,7 +303,7 @@ async fn oauth_login(
     let refresh_seconds = tokens.refresh_expires_in.round() as i64;
     let session_id = random_session_id();
     let session_started_at = chrono::Utc::now();
-    let auth = json!({"AccessToken":tokens.access_token,"RefreshToken":tokens.refresh_token,"AccessExpiresAt":(session_started_at + chrono::Duration::seconds(access_seconds)).to_rfc3339(),"RefreshExpiresAt":(session_started_at + chrono::Duration::seconds(refresh_seconds)).to_rfc3339(),"UserId":user_id,"DisplayName":display_name,"Permissions":permissions,"Roles":roles,"ConfigurationAvailable":configuration_available,"SessionId":session_id,"SessionStartedAt":session_started_at.to_rfc3339(),"StationId":station_id,"MasterUrl":master_url});
+    let auth = json!({"AccessToken":tokens.access_token,"RefreshToken":tokens.refresh_token,"AccessExpiresAt":(session_started_at + chrono::Duration::seconds(access_seconds)).to_rfc3339(),"RefreshExpiresAt":(session_started_at + chrono::Duration::seconds(refresh_seconds)).to_rfc3339(),"UserId":user_id,"DisplayName":display_name,"Permissions":permissions,"Roles":roles,"ConfigurationAvailable":configuration_available,"SessionId":session_id,"SessionStartedAt":session_started_at.to_rfc3339(),"StationId":station_id,"MasterUrl":master_origin});
     let message = json!({"Version":1,"Operation":"SetOAuthSession","Auth":auth,"Token":null})
         .to_string()
         + "\n";
@@ -300,6 +316,42 @@ async fn oauth_login(
     eprintln!("[oauth] sesión guardada en el servicio");
     Ok(json!({"Authenticated":true,"AccessExpiresIn":access_seconds}))
 }
+fn normalize_master_url(value: &str) -> Result<String, String> {
+    let mut url = Url::parse(value).map_err(|_| "URL de Master inválida")?;
+    if url.scheme() != "https"
+        || url.host_str().is_none()
+        || url.username() != ""
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+        || (url.path() != "" && url.path() != "/")
+    {
+        return Err("Master debe ser únicamente un dominio HTTPS".into());
+    }
+    url.set_path("");
+    Ok(url.to_string().trim_end_matches('/').to_string())
+}
+
+fn validate_station(station: &Value, installation_id: &str, studio_id: &str) -> Result<(), String> {
+    let returned_installation = station
+        .get("installationId")
+        .and_then(Value::as_str)
+        .ok_or("Master no devolvió station.installationId")?;
+    if returned_installation != installation_id {
+        return Err("La estación devuelta por Master no coincide con esta instalación".into());
+    }
+    let returned_studio = station
+        .get("studioId")
+        .and_then(Value::as_str)
+        .ok_or("Master no devolvió station.studioId")?;
+    if returned_studio != studio_id {
+        return Err(
+            "La estación devuelta por Master no coincide con el estudio configurado".into(),
+        );
+    }
+    Ok(())
+}
+
 fn open_browser(target: &str) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {

@@ -1,8 +1,7 @@
 name: Release Windows
 on:
   push:
-    tags: ['v*']
-  workflow_dispatch:
+    branches: [main]
 permissions:
   contents: write
 jobs:
@@ -10,6 +9,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
@@ -17,6 +18,27 @@ jobs:
         with:
           node-version: '24'
       - uses: dtolnay/rust-toolchain@stable
+      - name: Calculate and apply next version
+        shell: pwsh
+        run: |
+          $latest = (git tag --list 'v*' --sort=-version:refname | Select-Object -First 1).Trim()
+          if ([string]::IsNullOrWhiteSpace($latest)) {
+            $base = [version]'0.1.0'
+          } else {
+            $base = [version]($latest.TrimStart('v'))
+          }
+          $version = '{0}.{1}.{2}' -f $base.Major, $base.Minor, ($base.Build + 1)
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+          npm version $version --no-git-tag-version --prefix apps/desktop
+          $cargo = Get-Content apps/desktop/src-tauri/Cargo.toml -Raw
+          $cargo = $cargo -replace '(?m)^version = "[^"]+"', ('version = "' + $version + '"')
+          Set-Content apps/desktop/src-tauri/Cargo.toml $cargo -NoNewline
+          $tauri = Get-Content apps/desktop/src-tauri/tauri.conf.json -Raw
+          $tauri = $tauri -replace '"version"\s*:\s*"[^"]+"', ('"version": "' + $version + '"')
+          Set-Content apps/desktop/src-tauri/tauri.conf.json $tauri -NoNewline
+
+          cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml
       - run: dotnet test --configuration Release
       - run: dotnet publish src/VelvetAgent.Service -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -o artifacts/service
       - run: npm ci
@@ -29,10 +51,21 @@ jobs:
           dotnet tool install --global wix --version 6.0.2
           wix extension add WixToolset.Util.wixext/6.0.2 -g
           $version = (Get-Content apps/desktop/package.json | ConvertFrom-Json).version
-          if ('${{ github.ref_type }}' -eq 'tag' -and '${{ github.ref_name }}' -ne "v$version") { throw 'Tag y versión no coinciden' }
           wix build installer/windows/Package.wxs -arch x64 -ext WixToolset.Util.wixext -d ProductVersion=$version -d ServiceDir=artifacts/service -d DesktopExe=apps/desktop/src-tauri/target/release/velvet-agent-desktop.exe -o artifacts/VelvetAgent.msi
           if (!(Test-Path artifacts/VelvetAgent.msi)) { throw 'Falta MSI' }
           Get-FileHash artifacts/VelvetAgent.msi -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  VelvetAgent.msi" } | Out-File artifacts/SHA256SUMS.txt -Encoding ascii
+      - name: Commit version and create tag
+        shell: pwsh
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/desktop/package.json apps/desktop/package-lock.json apps/desktop/src-tauri/Cargo.toml apps/desktop/src-tauri/Cargo.lock apps/desktop/src-tauri/tauri.conf.json
+          if (!(git diff --cached --quiet)) {
+            git commit -m "chore: bump version to $env:VERSION [skip ci]"
+            git push origin HEAD:main
+          }
+          git tag "v$env:VERSION"
+          git push origin "v$env:VERSION"
       - uses: actions/upload-artifact@v4
         with:
           name: velvet-agent-windows-unsigned
@@ -41,7 +74,6 @@ jobs:
             artifacts/SHA256SUMS.txt
           if-no-files-found: error
       - name: Create GitHub Release
-        if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ github.ref_name }}" artifacts/VelvetAgent.msi artifacts/SHA256SUMS.txt --title "VELVET Agent ${{ github.ref_name }}" --notes "MVP Windows sin firma. Consultar docs/DEPLOYMENT.md antes de instalar en producción."
+        run: gh release create "v$env:VERSION" artifacts/VelvetAgent.msi artifacts/SHA256SUMS.txt --title "VELVET Agent v$env:VERSION" --notes "MVP Windows sin firma. Consultar docs/DEPLOYMENT.md antes de instalar en producción."
