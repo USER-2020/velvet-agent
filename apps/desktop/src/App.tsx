@@ -232,8 +232,9 @@ export default function App() {
       await enroll(token);
       if (notifications) setToast('Estación enrolada correctamente.');
       await refresh();
-    } catch {
-      setToast('No se pudo enrolar. Comprueba token, permisos y conexión.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setToast(`No se pudo enrolar: ${message}`);
     } finally {
       setToken('');
       setConfirm(false);

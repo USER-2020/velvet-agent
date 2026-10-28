@@ -2,11 +2,14 @@ using VelvetAgent.Core;
 using VelvetAgent.Infrastructure;
 using VelvetAgent.Service;
 var builder = Host.CreateApplicationBuilder(args);
-builder.Logging.ClearProviders(); builder.Logging.AddJsonConsole();
 var defaults = new AgentConfiguration(Environment.GetEnvironmentVariable("VELVET_MASTER_URL") ?? "https://localhost", int.TryParse(Environment.GetEnvironmentVariable("VELVET_HEARTBEAT_SECONDS"), out var interval) ? interval : 30, Environment.GetEnvironmentVariable("VELVET_DEVELOPMENT") == "1");
 defaults = defaults with { StudioId = Environment.GetEnvironmentVariable("VELVET_STUDIO_ID") };
 defaults.Validate();
 var directory = Environment.GetEnvironmentVariable("VELVET_DATA_DIR") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VelvetAgent");
+var logDirectory = Environment.GetEnvironmentVariable("VELVET_LOG_DIR") ?? (OperatingSystem.IsWindows()
+    ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "VELVET Agent", "logs")
+    : Path.Combine(Path.GetFullPath(directory), "logs"));
+builder.Logging.ClearProviders(); builder.Logging.AddJsonConsole(); builder.Logging.AddProvider(new RollingFileLoggerProvider(logDirectory));
 var state = new LocalState(Path.GetFullPath(directory));
 await state.IdentityAsync();
 var persisted = await state.ConfigurationAsync(defaults);

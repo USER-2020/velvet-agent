@@ -36,12 +36,28 @@ public sealed class LocalServer : BackgroundService
                 if (count == chars.Length) throw new InvalidDataException();
                 var request = JsonSerializer.Deserialize<LocalRequest>(new string(chars, 0, count), new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? throw new InvalidDataException();
                 LocalResponse response;
-                try { response = await runtime.DispatchAsync(request, admin, deadline.Token); } catch (Exception e) when (e is not OperationCanceledException) { response = new(1, false, null, "Operación fallida; revise enrolamiento y conectividad"); }
+                try { response = await runtime.DispatchAsync(request, admin, deadline.Token); }
+                catch (Exception e) when (e is not OperationCanceledException)
+                {
+                    logger.LogWarning("Petición local {Operation} falló ({Type}): {Message}", request.Operation, e.GetType().Name, SafeMessage(e));
+                    response = new(1, false, null, SafeMessage(e));
+                }
                 await writer.WriteLineAsync(JsonSerializer.Serialize(response).AsMemory(), deadline.Token);
             }
             catch (Exception e) when (!ct.IsCancellationRequested) { logger.LogWarning("Petición local rechazada ({Type})", e.GetType().Name); }
         }
     }
+
+    static string SafeMessage(Exception error) => error switch
+    {
+        UnauthorizedAccessException => "Permisos insuficientes. En Windows, ejecuta VELVET Agent como administrador para enrolar la estación.",
+        HttpRequestException http when http.StatusCode is not null => $"Master rechazó la solicitud (HTTP {(int)http.StatusCode.Value}). Verifica el token, la sede y la conectividad.",
+        TimeoutException => "Master no respondió dentro del tiempo permitido.",
+        InvalidDataException data => data.Message,
+        ArgumentException argument => argument.Message,
+        InvalidOperationException operation => operation.Message,
+        _ => "Operación fallida. Revisa los logs del servicio y la conectividad con Master.",
+    };
     [SupportedOSPlatform("windows")]
     static bool IsAdministrator(NamedPipeServerStream pipe)
     {
