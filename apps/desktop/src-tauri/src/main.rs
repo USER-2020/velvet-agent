@@ -178,6 +178,16 @@ async fn oauth_login(
             "No se pudo contactar Master".to_string()
         })?;
     let token_status = token_response.status();
+    let token_content_type = token_response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or("unknown")
+        .to_string();
+    eprintln!(
+        "[oauth] token response status={} content_type={}",
+        token_status, token_content_type
+    );
     if !token_status.is_success() {
         let detail = token_response.text().await.unwrap_or_default();
         eprintln!(
@@ -198,6 +208,13 @@ async fn oauth_login(
         eprintln!("[oauth] respuesta token inválida ({e}); cuerpo: {preview}");
         "Respuesta OAuth inválida".to_string()
     })?;
+    eprintln!(
+        "[oauth] token response complete: access_token_present={} refresh_token_present={} expires_in={} refresh_expires_in={}",
+        !tokens.access_token.is_empty(),
+        !tokens.refresh_token.is_empty(),
+        tokens.expires_in,
+        tokens.refresh_expires_in
+    );
     eprintln!("[oauth] tokens recibidos; consultando usuario");
     // Obtiene el usuario asociado al token para que el servicio pueda exponerlo
     // al Desktop en GetAgentStatus y la sesión no quede como un simple booleano.
@@ -212,6 +229,12 @@ async fn oauth_login(
         .json()
         .await
         .map_err(|_| "Respuesta de usuario inválida")?;
+    eprintln!(
+        "[oauth] /api/agent/me keys={:?} user_keys={:?} station_keys={:?}",
+        object_keys(&me),
+        me.get("user").map(object_keys).unwrap_or_default(),
+        me.get("station").map(object_keys).unwrap_or_default()
+    );
     let user = me.get("user").ok_or("Master no devolvió el usuario")?;
     let station_response: Value = client
         .get(format!("{master_origin}/api/agent/station"))
@@ -225,6 +248,11 @@ async fn oauth_login(
         .await
         .map_err(|_| "Respuesta de estación inválida")?;
     let station = station_response.get("station").unwrap_or(&station_response);
+    eprintln!(
+        "[oauth] /api/agent/station keys={:?} station_keys={:?}",
+        object_keys(&station_response),
+        object_keys(station)
+    );
     let station_id = station
         .get("id")
         .and_then(Value::as_i64)
@@ -328,6 +356,13 @@ fn normalize_master_url(value: &str) -> Result<String, String> {
     }
     url.set_path("");
     Ok(url.to_string().trim_end_matches('/').to_string())
+}
+
+fn object_keys(value: &Value) -> Vec<String> {
+    value
+        .as_object()
+        .map(|object| object.keys().cloned().collect())
+        .unwrap_or_default()
 }
 
 fn build_authorize_url(

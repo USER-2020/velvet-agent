@@ -2,7 +2,7 @@ using VelvetAgent.Core;
 using VelvetAgent.Infrastructure;
 namespace VelvetAgent.Service;
 
-public sealed class AgentRuntime(LocalState state, IMetricsProvider metrics, IObsController obs, IMasterClient master, ISecretStore secrets, AgentConfiguration configuration)
+public sealed class AgentRuntime(LocalState state, IMetricsProvider metrics, IObsController obs, IMasterClient master, ISecretStore deviceSecrets, ISecretStore oauthSecrets, AgentConfiguration configuration)
 {
     readonly SemaphoreSlim enrollmentLock = new(1, 1);
     readonly DateTimeOffset started = DateTimeOffset.UtcNow;
@@ -23,31 +23,30 @@ public sealed class AgentRuntime(LocalState state, IMetricsProvider metrics, IOb
     public async Task InitializeAsync(CancellationToken ct)
     {
         identity = await state.IdentityAsync(ct);
-        var raw = await secrets.ReadAsync(ct);
+        var deviceCredential = await deviceSecrets.ReadAsync(ct);
+        // Older builds stored OAuth JSON in the device credential slot. Do not
+        // treat that user session as a valid station enrollment.
         try
         {
-            var oauth = raw is null ? null : System.Text.Json.JsonSerializer.Deserialize<OAuthTokenSet>(raw);
-            if (oauth is not null && (string.IsNullOrWhiteSpace(oauth.MasterUrl) || !Uri.TryCreate(oauth.MasterUrl, UriKind.Absolute, out var previous) || !Uri.TryCreate(configuration.MasterUrl, UriKind.Absolute, out var current) || !string.Equals(previous.AbsoluteUri.TrimEnd('/'), current.AbsoluteUri.TrimEnd('/'), StringComparison.OrdinalIgnoreCase)))
-            {
-                await secrets.DeleteAsync(ct);
-                raw = null;
-            }
+            var legacyOAuth = deviceCredential is null ? null : System.Text.Json.JsonSerializer.Deserialize<OAuthTokenSet>(deviceCredential);
+            if (legacyOAuth is not null && !string.IsNullOrWhiteSpace(legacyOAuth.AccessToken)) deviceCredential = null;
         }
         catch (System.Text.Json.JsonException) { }
-        Enrollment = raw is null ? EnrollmentState.NotEnrolled : EnrollmentState.Enrolled;
+        Enrollment = deviceCredential is null ? EnrollmentState.NotEnrolled : EnrollmentState.Enrolled;
     }
     public async Task TickAsync(CancellationToken ct)
     {
         if (!configuration.Development && Enrollment != EnrollmentState.Enrolled) return;
         try { await master.HeartbeatAsync(new(Guid.NewGuid(), DateTimeOffset.UtcNow, await StatusAsync(ct)), ct); Connected = true; LastSync = DateTimeOffset.UtcNow; }
-        catch (DeviceRevokedException) { Connected = false; Enrollment = EnrollmentState.Revoked; await secrets.DeleteAsync(ct); }
+        catch (DeviceRevokedException) { Connected = false; Enrollment = EnrollmentState.Revoked; await deviceSecrets.DeleteAsync(ct); await oauthSecrets.DeleteAsync(ct); }
+        catch (OAuthSessionRevokedException) { Connected = false; await oauthSecrets.DeleteAsync(ct); }
         catch { Connected = false; throw; }
     }
     public async Task EnrollAsync(string token, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(token) || token.Length > 4096 || token.Any(char.IsControl)) throw new ArgumentException("Token inválido");
         await enrollmentLock.WaitAsync(ct);
-        try { identity ??= await state.IdentityAsync(ct); var r = await master.EnrollAsync(new(identity.InstallationId, identity.Hostname, token), ct); if (string.IsNullOrWhiteSpace(r.DeviceToken) || r.DeviceToken.Any(char.IsControl)) throw new InvalidDataException("Credencial inválida"); await secrets.WriteAsync(r.DeviceToken, ct); Enrollment = EnrollmentState.Enrolled; } finally { enrollmentLock.Release(); }
+        try { identity ??= await state.IdentityAsync(ct); var r = await master.EnrollAsync(new(identity.InstallationId, identity.Hostname, token), ct); if (string.IsNullOrWhiteSpace(r.DeviceToken) || r.DeviceToken.Any(char.IsControl)) throw new InvalidDataException("Credencial inválida"); await deviceSecrets.WriteAsync(r.DeviceToken, ct); Enrollment = EnrollmentState.Enrolled; } finally { enrollmentLock.Release(); }
     }
     public async Task<LocalResponse> DispatchAsync(LocalRequest request, bool admin, CancellationToken ct)
     {
@@ -85,21 +84,19 @@ public sealed class AgentRuntime(LocalState state, IMetricsProvider metrics, IOb
         {
             // El cliente HTTP obtiene el Bearer desde el almacén local; guardar
             // primero los tokens permite autenticar la llamada sessions/start.
-            await secrets.WriteAsync(System.Text.Json.JsonSerializer.Serialize(value), ct);
+            await oauthSecrets.WriteAsync(System.Text.Json.JsonSerializer.Serialize(value), ct);
             var startedSession = await master.StartSessionAsync(new(identity.InstallationId, value.StationId.Value, configuration.StudioId, userId), ct);
             if (!Guid.TryParse(startedSession.SessionId, out var masterSessionId)) throw new InvalidDataException("sessionId inválido de Master");
             value = value with { SessionId = masterSessionId, SessionStartedAt = startedSession.StartedAt };
         }
-        await secrets.WriteAsync(System.Text.Json.JsonSerializer.Serialize(value), ct);
-        await secrets.WriteAsync(System.Text.Json.JsonSerializer.Serialize(value), ct);
-        Enrollment = EnrollmentState.Enrolled;
+        await oauthSecrets.WriteAsync(System.Text.Json.JsonSerializer.Serialize(value), ct);
         return new { Authenticated = true, AccessExpiresAt = value.AccessExpiresAt };
     }
     async Task<object> StartTransmissionAsync(CancellationToken ct) { var session = await OAuthSessionAsync(ct) ?? throw new InvalidOperationException("Sesión no autenticada"); if (session.SessionId is null) throw new InvalidOperationException("Sesión de trabajo no iniciada"); await master.StartTransmissionAsync(session.SessionId.Value.ToString(), ct); return new { Started = true }; }
     async Task<object> StopTransmissionAsync(CancellationToken ct) { var session = await OAuthSessionAsync(ct) ?? throw new InvalidOperationException("Sesión no autenticada"); if (session.SessionId is null) throw new InvalidOperationException("Sesión de trabajo no iniciada"); await master.StopTransmissionAsync(session.SessionId.Value.ToString(), ct); return new { Stopped = true }; }
     async Task<object> RevokeOAuthSessionAsync(CancellationToken ct)
     {
-        var raw = await secrets.ReadAsync(ct);
+        var raw = await oauthSecrets.ReadAsync(ct);
         try
         {
             var oauth = raw is null ? null : System.Text.Json.JsonSerializer.Deserialize<OAuthTokenSet>(raw);
@@ -107,19 +104,18 @@ public sealed class AgentRuntime(LocalState state, IMetricsProvider metrics, IOb
             if (oauth is not null) await master.RevokeOAuthAsync(oauth.AccessToken, ct);
         }
         catch (System.Text.Json.JsonException) { }
-        await secrets.DeleteAsync(ct);
-        Enrollment = EnrollmentState.NotEnrolled;
+        await oauthSecrets.DeleteAsync(ct);
         return new { Revoked = true };
     }
     async Task<bool> HasOAuthSessionAsync(CancellationToken ct)
     {
-        var raw = await secrets.ReadAsync(ct);
+        var raw = await oauthSecrets.ReadAsync(ct);
         try { return raw is not null && System.Text.Json.JsonSerializer.Deserialize<OAuthTokenSet>(raw) is not null; }
         catch (System.Text.Json.JsonException) { return false; }
     }
     async Task<OAuthTokenSet?> OAuthSessionAsync(CancellationToken ct)
     {
-        var raw = await secrets.ReadAsync(ct);
+        var raw = await oauthSecrets.ReadAsync(ct);
         try { return raw is null ? null : System.Text.Json.JsonSerializer.Deserialize<OAuthTokenSet>(raw); }
         catch (System.Text.Json.JsonException) { return null; }
     }

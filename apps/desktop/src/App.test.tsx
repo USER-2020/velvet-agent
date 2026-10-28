@@ -164,6 +164,12 @@ describe('Interfaz operativa', () => {
     expect(screen.queryByText('private obs error')).toBeNull();
   });
   it('requiere confirmación explícita antes de enviar el token y lo borra después', async () => {
+    const masterStatus: Status = {
+      ...status,
+      Mode: 'master-api',
+      Enrollment: 1,
+      UserAuthenticated: true,
+    };
     vi.mocked(invoke).mockImplementation(async (_command, args) => {
       const { operation } = args as { operation: string };
       return {
@@ -175,10 +181,11 @@ describe('Interfaz operativa', () => {
                 MasterUrl: 'https://master.invalid',
                 HeartbeatSeconds: 30,
                 Development: false,
+                StudioId: 'studio-paris',
               }
             : operation === 'RequestEnrollment'
               ? { Enrolled: true }
-              : { ...status, Mode: 'master-api' },
+              : masterStatus,
       };
     });
     render(<App />);
