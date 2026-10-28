@@ -292,7 +292,13 @@ export default function App() {
   const authRequired =
     !loading &&
     status?.Mode === 'master-api' &&
+    status?.Enrollment === 1 &&
     status.UserAuthenticated === false;
+  const enrollmentRequired =
+    !loading &&
+    connected &&
+    status?.Mode === 'master-api' &&
+    status?.Enrollment !== 1;
   if (loading && !status) {
     return (
       <div className="auth-gate" role="status" aria-live="polite">
@@ -331,6 +337,71 @@ export default function App() {
             <small>Falta configurar VELVET_STUDIO_ID en el servicio.</small>
           )}
           <footer>Estación {status.Identity.Hostname} · Acceso seguro</footer>
+        </div>
+      </div>
+    );
+  }
+  if (enrollmentRequired) {
+    return (
+      <div className="auth-gate">
+        <div className="auth-gate__card">
+          <div className="auth-gate__icon" aria-hidden="true">
+            <ShieldCheck size={25} />
+          </div>
+          <img src="/brand/velvet-studio.svg" alt="The Velvet Studio" />
+          <span className="eyebrow">VELVET AGENT</span>
+          <h1>Registra esta estación</h1>
+          <p>
+            Primero debes enrolar este computador en VELVET Master. Abre el
+            Agent como administrador de Windows e ingresa el token temporal.
+          </p>
+          <form
+            className="enrollment-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setConfirm(true);
+            }}
+          >
+            <label htmlFor="enrollment-token-gate">Token de enrolamiento</label>
+            <input
+              id="enrollment-token-gate"
+              type="password"
+              autoComplete="off"
+              spellCheck={false}
+              maxLength={4096}
+              placeholder="Token temporal de Master"
+              value={token}
+              onChange={(event) => setToken(event.target.value)}
+              disabled={busy || !config?.StudioId}
+            />
+            <button
+              className="button auth-gate__button"
+              type="submit"
+              disabled={busy || !config?.StudioId || !token.trim()}
+            >
+              {busy ? 'Enrolando estación…' : 'Enrolar estación'}
+            </button>
+          </form>
+          {!config?.StudioId && (
+            <small>Falta configurar VELVET_STUDIO_ID en el servicio.</small>
+          )}
+          <footer>Estación {status?.Identity.Hostname} · Acceso seguro</footer>
+          {confirm && (
+            <ConfirmDialog
+              title="¿Enrolar esta estación?"
+              onConfirm={() => void confirmEnrollment()}
+              onClose={() => {
+                setConfirm(false);
+                setToken('');
+              }}
+              busy={busy}
+            >
+              <p>
+                Se enviará el token temporal a Master para registrar este
+                equipo. En Windows se requieren permisos de administrador.
+              </p>
+            </ConfirmDialog>
+          )}
         </div>
       </div>
     );

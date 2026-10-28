@@ -6,7 +6,7 @@
       "dotnetRunMessages": true,
       "environmentVariables": {
         "DOTNET_ENVIRONMENT": "Development",
-        "VELVET_MASTER_URL": "https://brain-competent-shows-surgical.trycloudflare.com",
+        "VELVET_MASTER_URL": "https://dev.thevelvetstudio.co",
         "VELVET_STUDIO_ID": "studio-manizales",
         "VELVET_HEARTBEAT_SECONDS": "30",
         "VELVET_DATA_DIR": "/tmp/velvet-agent-master-local"
