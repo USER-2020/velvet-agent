@@ -5,6 +5,11 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+
+concurrency:
+  group: release-windows-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: windows-latest
@@ -54,7 +59,7 @@ jobs:
           $tauri = $tauri -replace '"version"\s*:\s*"[^"]+"', ('"version": "' + $version + '"')
           Set-Content apps/desktop/src-tauri/tauri.conf.json $tauri -NoNewline
 
-      - run: dotnet restore
+      - run: dotnet restore -r win-x64
       - run: dotnet publish src/VelvetAgent.Service -c Release -r win-x64 --self-contained true --no-restore -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -o artifacts/service
       - run: npm ci
         working-directory: apps/desktop
