@@ -73,7 +73,6 @@ async fn oauth_login(
         .try_lock()
         .map_err(|_| "Ya hay un inicio de sesión OAuth en curso".to_string())?;
     let master_origin = normalize_master_url(&master_url)?;
-    let mut base = Url::parse(&master_origin).map_err(|_| "URL de Master inválida")?;
     let listener = TcpListener::bind("127.0.0.1:0")
         .await
         .map_err(|_| "No se pudo abrir callback local")?;
@@ -87,19 +86,18 @@ async fn oauth_login(
     let verifier = URL_SAFE_NO_PAD.encode(verifier_bytes);
     let state = URL_SAFE_NO_PAD.encode(rand::random::<[u8; 32]>());
     let challenge = URL_SAFE_NO_PAD.encode(sha2::Sha256::digest(verifier.as_bytes()));
-    base.set_path("/oauth/agent/authorize");
-    base.query_pairs_mut()
-        .append_pair("client_id", "velvet-agent")
-        .append_pair("redirect_uri", &redirect)
-        .append_pair("response_type", "code")
-        .append_pair("installation_id", &installation_id)
-        .append_pair("hostname", &hostname)
-        .append_pair("studio_id", &studio_id)
-        .append_pair("code_challenge", &challenge)
-        .append_pair("code_challenge_method", "S256")
-        .append_pair("state", &state);
+    let authorize_url = build_authorize_url(
+        &master_origin,
+        &redirect,
+        &installation_id,
+        &hostname,
+        &studio_id,
+        &challenge,
+        &state,
+    )?;
     eprintln!("[oauth] callback escuchando en {redirect}");
-    open_browser(base.as_str())?;
+    eprintln!("[oauth] abriendo /oauth/agent/authorize con parámetros OAuth completos");
+    open_browser(&authorize_url)?;
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(180);
     let (mut stream, target) = loop {
         let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
@@ -332,6 +330,30 @@ fn normalize_master_url(value: &str) -> Result<String, String> {
     Ok(url.to_string().trim_end_matches('/').to_string())
 }
 
+fn build_authorize_url(
+    master_origin: &str,
+    redirect_uri: &str,
+    installation_id: &str,
+    hostname: &str,
+    studio_id: &str,
+    code_challenge: &str,
+    state: &str,
+) -> Result<String, String> {
+    let mut url = Url::parse(master_origin).map_err(|_| "URL de Master inválida")?;
+    url.set_path("/oauth/agent/authorize");
+    url.query_pairs_mut()
+        .append_pair("client_id", "velvet-agent")
+        .append_pair("response_type", "code")
+        .append_pair("redirect_uri", redirect_uri)
+        .append_pair("installation_id", installation_id)
+        .append_pair("hostname", hostname)
+        .append_pair("studio_id", studio_id)
+        .append_pair("code_challenge", code_challenge)
+        .append_pair("code_challenge_method", "S256")
+        .append_pair("state", state);
+    Ok(url.to_string())
+}
+
 fn validate_station(station: &Value, installation_id: &str, studio_id: &str) -> Result<(), String> {
     let returned_installation = station
         .get("installationId")
@@ -350,6 +372,46 @@ fn validate_station(station: &Value, installation_id: &str, studio_id: &str) -> 
         );
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_authorize_url;
+    use std::collections::HashMap;
+    use url::Url;
+
+    #[test]
+    fn authorization_url_contains_complete_oauth_parameters() {
+        let value = build_authorize_url(
+            "https://dev.thevelvetstudio.co",
+            "http://127.0.0.1:43123/oauth/callback",
+            "installation-uuid",
+            "PC-SALA-PARIS",
+            "studio-paris",
+            "challenge-value",
+            "state-value",
+        )
+        .expect("URL válida");
+        let url = Url::parse(&value).expect("URL parseable");
+        assert_eq!(url.path(), "/oauth/agent/authorize");
+        let query: HashMap<_, _> = url.query_pairs().into_owned().collect();
+        for key in [
+            "client_id",
+            "response_type",
+            "redirect_uri",
+            "installation_id",
+            "hostname",
+            "studio_id",
+            "code_challenge",
+            "code_challenge_method",
+            "state",
+        ] {
+            assert!(query.contains_key(key), "falta parámetro {key}");
+        }
+        assert_eq!(query["client_id"], "velvet-agent");
+        assert_eq!(query["response_type"], "code");
+        assert_eq!(query["code_challenge_method"], "S256");
+    }
 }
 
 fn open_browser(target: &str) -> Result<(), String> {
