@@ -1,0 +1,82 @@
+name: Validate Windows Installer
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-installer:
+    name: Build MSI only
+    runs-on: windows-latest
+    steps:
+      - name: Checkout selected branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 1
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: windows-installer-nuget-${{ hashFiles('**/*.csproj', '**/packages.lock.json') }}
+          restore-keys: windows-installer-nuget-
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/desktop/src-tauri/target
+          key: windows-installer-cargo-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
+          restore-keys: windows-installer-cargo-
+
+      - name: Restore .NET dependencies
+        run: dotnet restore
+
+      - name: Publish Windows service
+        run: dotnet publish src/VelvetAgent.Service -c Release -r win-x64 --self-contained true --no-restore -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -o artifacts/service
+
+      - name: Install Desktop dependencies
+        run: npm ci
+        working-directory: apps/desktop
+
+      - name: Build Desktop executable
+        run: npm run tauri build -- --no-bundle
+        working-directory: apps/desktop
+
+      - name: Install WiX 6
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 6.0.2
+          wix extension add WixToolset.Util.wixext/6.0.2 -g
+
+      - name: Build MSI without publishing
+        shell: pwsh
+        run: |
+          $version = (Get-Content apps/desktop/package.json | ConvertFrom-Json).version
+          wix build installer/windows/Package.wxs -arch x64 -ext WixToolset.Util.wixext -d ProductVersion=$version -d ServiceDir=artifacts/service -d DesktopExe=apps/desktop/src-tauri/target/release/velvet-agent-desktop.exe -o artifacts/VelvetAgent.msi
+          if (!(Test-Path artifacts/VelvetAgent.msi)) { throw 'Falta MSI' }
+          Get-FileHash artifacts/VelvetAgent.msi -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  VelvetAgent.msi" } | Out-File artifacts/SHA256SUMS.txt -Encoding ascii
+
+      - name: Upload test MSI
+        uses: actions/upload-artifact@v4
+        with:
+          name: velvet-agent-windows-installer-test-${{ github.run_number }}
+          path: |
+            artifacts/VelvetAgent.msi
+            artifacts/SHA256SUMS.txt
+          if-no-files-found: error

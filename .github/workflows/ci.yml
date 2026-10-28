@@ -15,6 +15,11 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: windows-nuget-${{ hashFiles('**/*.csproj', '**/packages.lock.json') }}
+          restore-keys: windows-nuget-
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -23,6 +28,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/desktop/src-tauri/target
+          key: windows-cargo-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
+          restore-keys: windows-cargo-
       - run: dotnet restore
       - run: dotnet build --no-restore --configuration Release
       - run: dotnet test --no-build --configuration Release --logger trx
@@ -34,11 +47,7 @@ jobs:
         working-directory: apps/desktop
       - run: npm run check
         working-directory: apps/desktop
-      - run: npm run build
-        working-directory: apps/desktop
       - run: cargo fmt --check
-        working-directory: apps/desktop/src-tauri
-      - run: cargo check --locked
         working-directory: apps/desktop/src-tauri
       - run: npm run tauri build -- --no-bundle
         working-directory: apps/desktop

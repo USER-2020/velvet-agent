@@ -2,6 +2,7 @@ name: Release Windows
 on:
   push:
     branches: [main]
+  workflow_dispatch:
 permissions:
   contents: write
 jobs:
@@ -14,10 +15,25 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: windows-nuget-${{ hashFiles('**/*.csproj', '**/packages.lock.json') }}
+          restore-keys: windows-nuget-
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            apps/desktop/src-tauri/target
+          key: windows-cargo-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
+          restore-keys: windows-cargo-
       - name: Calculate and apply next version
         shell: pwsh
         run: |
@@ -38,7 +54,8 @@ jobs:
           $tauri = $tauri -replace '"version"\s*:\s*"[^"]+"', ('"version": "' + $version + '"')
           Set-Content apps/desktop/src-tauri/tauri.conf.json $tauri -NoNewline
 
-      - run: dotnet publish src/VelvetAgent.Service -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -o artifacts/service
+      - run: dotnet restore
+      - run: dotnet publish src/VelvetAgent.Service -c Release -r win-x64 --self-contained true --no-restore -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -o artifacts/service
       - run: npm ci
         working-directory: apps/desktop
       - run: npm run tauri build -- --no-bundle
@@ -53,6 +70,7 @@ jobs:
           if (!(Test-Path artifacts/VelvetAgent.msi)) { throw 'Falta MSI' }
           Get-FileHash artifacts/VelvetAgent.msi -Algorithm SHA256 | ForEach-Object { "$($_.Hash)  VelvetAgent.msi" } | Out-File artifacts/SHA256SUMS.txt -Encoding ascii
       - name: Commit version and create tag
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: pwsh
         run: |
           git config user.name 'github-actions[bot]'
@@ -72,6 +90,7 @@ jobs:
             artifacts/SHA256SUMS.txt
           if-no-files-found: error
       - name: Create GitHub Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release create "v$env:VERSION" artifacts/VelvetAgent.msi artifacts/SHA256SUMS.txt --title "VELVET Agent v$env:VERSION" --notes "MVP Windows sin firma. Consultar docs/DEPLOYMENT.md antes de instalar en producción."

@@ -16,10 +16,10 @@
    </Component>
    <Component Id="ServiceEnvironmentComponent" Guid="5E6FA43A-313D-4269-B7E7-1417A2B7B608" NeverOverwrite="yes">
     <RegistryValue Root="HKLM" Key="SYSTEM\CurrentControlSet\Services\VelvetAgent" Name="Environment" Type="multiString" KeyPath="yes">
-     <MultiStringValue>VELVET_MASTER_URL=[VELVET_MASTER_URL]</MultiStringValue>
-     <MultiStringValue>VELVET_STUDIO_ID=[VELVET_STUDIO_ID]</MultiStringValue>
-     <MultiStringValue>VELVET_HEARTBEAT_SECONDS=[VELVET_HEARTBEAT_SECONDS]</MultiStringValue>
-     <MultiStringValue>VELVET_LOG_DIR=[VELVET_LOG_DIR]</MultiStringValue>
+     <MultiStringValue Value="VELVET_MASTER_URL=[VELVET_MASTER_URL]"/>
+     <MultiStringValue Value="VELVET_STUDIO_ID=[VELVET_STUDIO_ID]"/>
+     <MultiStringValue Value="VELVET_HEARTBEAT_SECONDS=[VELVET_HEARTBEAT_SECONDS]"/>
+     <MultiStringValue Value="VELVET_LOG_DIR=[VELVET_LOG_DIR]"/>
     </RegistryValue>
    </Component>
    <Component Id="DesktopComponent" Guid="7AC690E7-B8E6-477D-962B-8F63C856DBD6"><File Id="DesktopExe" Source="$(DesktopExe)" KeyPath="yes"/></Component>
@@ -27,7 +27,7 @@
   <StandardDirectory Id="CommonAppDataFolder"><Directory Id="VelvetCommonData" Name="VELVET Agent"><Directory Id="VelvetLogs" Name="logs">
    <Component Id="LogDirectoryComponent" Guid="C3DA4037-0472-403C-9A55-3D1542071A9E" Permanent="yes">
     <CreateFolder>
-     <util:PermissionEx User="NT AUTHORITY\LocalService" GenericRead="yes" CreateFile="yes" Write="yes"/>
+     <util:PermissionEx User="NT AUTHORITY\LocalService" GenericRead="yes" GenericWrite="yes"/>
     </CreateFolder>
    </Component>
   </Directory></Directory></StandardDirectory>
