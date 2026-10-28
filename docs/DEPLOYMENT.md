@@ -6,7 +6,7 @@ El build publica .NET autocontenido win-x64 en archivo único con librerías nat
 
 Prerequisito externo: Microsoft Edge WebView2 Runtime instalado. Este MSI no lo descarga ni lo incorpora. Verificarlo antes de instalar. El MSI es x64 y sin firma; no asumir que Windows SmartScreen confiará en él.
 
-Configuración productiva del servicio: `launchSettings.json` solo aplica a `dotnet run` y no configura el servicio instalado. Definir las variables en el entorno del sistema o en el valor MULTI_SZ `Environment` de `HKLM\SYSTEM\CurrentControlSet\Services\VelvetAgent`, y reiniciar el servicio después de modificarlas:
+Configuración productiva del servicio: `launchSettings.json` solo aplica a `dotnet run` y no configura el servicio instalado. El MSI escribe por defecto el valor MULTI_SZ `Environment` en `HKLM\SYSTEM\CurrentControlSet\Services\VelvetAgent`; puede personalizarse durante la instalación con propiedades MSI y se conserva durante upgrades:
 
 ```text
 VELVET_MASTER_URL=https://dev.thevelvetstudio.co
@@ -15,9 +15,17 @@ VELVET_HEARTBEAT_SECONDS=30
 VELVET_LOG_DIR=C:\ProgramData\VELVET Agent\logs
 ```
 
+Para una estación con otra sede o Master, usar propiedades MSI (no incluir tokens):
+
+```powershell
+msiexec /i VelvetAgent.msi VELVET_MASTER_URL="https://dev.thevelvetstudio.co" VELVET_STUDIO_ID="studio-manizales" /qb
+```
+
+Las propiedades son seguras para la secuencia elevada del MSI, pero no son secretos. El administrador debe validar que la sede y la URL correspondan a la estación antes de instalar.
+
 `VELVET_STUDIO_ID` debe corresponder a la sede real de la estación; no fijar una sede incorrecta en un MSI que se distribuirá a varias sedes. No poner tokens allí. Por defecto, los datos protegidos quedan en `C:\Windows\ServiceProfiles\LocalService\AppData\Local\VelvetAgent`; verificar la ruta efectiva y sus ACL. `VELVET_DATA_DIR` es opcional y debe tener permisos exclusivos para LocalService y administradores. No cambiar la identidad del servicio después del enrolamiento: DPAPI CurrentUser no se podrá descifrar bajo otra cuenta.
 
-El servicio crea logs JSON rotativos en `C:\ProgramData\VELVET Agent\logs\` (o en `VELVET_LOG_DIR` si se define). Conserva hasta 14 archivos y rota al superar aproximadamente 5 MB. Los logs no deben contener tokens, contraseñas, códigos OAuth ni `code_verifier`.
+El MSI crea `C:\ProgramData\VELVET Agent\logs\` y concede a `NT AUTHORITY\LocalService` únicamente permisos de lectura y creación/escritura de archivos. El servicio crea logs JSON rotativos allí (o en `VELVET_LOG_DIR` si se define), conserva hasta 14 archivos y rota al superar aproximadamente 5 MB. Los logs no deben contener tokens, contraseñas, códigos OAuth ni `code_verifier`.
 
 Enrolar abriendo Desktop como administrador. Validar acceso efectivo al pipe e ingresar un token de un solo uso generado por Master mediante `POST /api/agent/enroll`. Master devuelve una credencial permanente para la estación; el token temporal no se usa en cada inicio de sesión. Si el token es inválido, consumido o Master no está disponible, Desktop muestra el motivo mediante una notificación y el servicio lo registra sin exponer credenciales. La configuración se lee al iniciar el servicio; cambiar URL, sede o variables requiere reiniciarlo.
 
@@ -35,7 +43,7 @@ Firma futura: reservar secretos `WINDOWS_CERTIFICATE_BASE64`, `WINDOWS_CERTIFICA
 6. Revocar dispositivo en Master: 401/403, credencial eliminada y reenrolamiento explícito. Cerrar sesión OAuth en Master no debe borrar el enrolamiento.
 7. Abrir OBS en usuario interactivo: detectar proceso, consultar escenas/streaming; rechazar autenticación pendiente. No cambiar escena ni transmitir automáticamente.
 8. Probar pipe desde usuario remoto y rechazar; mensajes de versión inválida, desconocidos, grandes y lentos no deben ejecutar acciones.
-9. Actualizar MSI con versión superior; preservar UUID/configuración/DPAPI; impedir downgrade. Verificar que se detiene servicio anterior antes de reemplazar.
+9. Actualizar MSI con versión superior; preservar UUID/configuración/DPAPI y el valor `Environment`; impedir downgrade. Verificar que el servicio anterior se detiene y que `VelvetAgent.Service.exe` queda presente después del upgrade.
 10. Desinstalar: servicio y archivos de programa desaparecen; datos operativos permanecen. Reinstalar: confirmar política de identidad persistente.
 11. Probar reinicio tras fallo y permisos sobre datos bajo cuenta LocalService. Revisar logs del SCM y del instalador.
 
