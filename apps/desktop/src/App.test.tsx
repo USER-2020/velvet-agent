@@ -181,7 +181,7 @@ describe('Interfaz operativa', () => {
                 MasterUrl: 'https://master.invalid',
                 HeartbeatSeconds: 30,
                 Development: false,
-              StudioId: 'studio-paris',
+                StudioId: 'studio-paris',
               }
             : operation === 'RequestEnrollment'
               ? { Enrolled: true }
