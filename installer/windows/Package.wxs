@@ -1,6 +1,10 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
- <Package Name="VELVET Agent" Manufacturer="THE VELVET STUDIO" Version="$(ProductVersion)" UpgradeCode="7E17BF51-5ED5-4CFD-BA74-91389C6B4F91" Scope="perMachine">
-  <MajorUpgrade DowngradeErrorMessage="Existe una versión más reciente de VELVET Agent." Schedule="afterInstallInitialize"/>
+ <Package Name="VELVET Agent" Manufacturer="THE VELVET STUDIO" Version="$(ProductVersion)" ProductCode="*" UpgradeCode="7E17BF51-5ED5-4CFD-BA74-91389C6B4F91" Scope="perMachine">
+  <Property Id="VELVET_MASTER_URL" Value="https://dev.thevelvetstudio.co" Secure="yes"/>
+  <Property Id="VELVET_STUDIO_ID" Value="studio-manizales" Secure="yes"/>
+  <Property Id="VELVET_HEARTBEAT_SECONDS" Value="30" Secure="yes"/>
+  <Property Id="VELVET_LOG_DIR" Value="C:\ProgramData\VELVET Agent\logs" Secure="yes"/>
+  <MajorUpgrade DowngradeErrorMessage="Existe una versión más reciente de VELVET Agent." Schedule="afterInstallExecute"/>
   <MediaTemplate EmbedCab="yes"/>
   <StandardDirectory Id="ProgramFiles64Folder"><Directory Id="INSTALLFOLDER" Name="VELVET Agent">
    <Component Id="ServiceComponent" Guid="A1BD2C9C-C53D-43F9-ABCC-C3EE366C781A">
@@ -10,9 +14,24 @@
     </ServiceInstall>
     <ServiceControl Id="Control" Name="VelvetAgent" Start="install" Stop="both" Remove="uninstall" Wait="yes"/>
    </Component>
+   <Component Id="ServiceEnvironmentComponent" Guid="5E6FA43A-313D-4269-B7E7-1417A2B7B608" NeverOverwrite="yes">
+    <RegistryValue Root="HKLM" Key="SYSTEM\CurrentControlSet\Services\VelvetAgent" Name="Environment" Type="multiString" KeyPath="yes">
+     <MultiStringValue>VELVET_MASTER_URL=[VELVET_MASTER_URL]</MultiStringValue>
+     <MultiStringValue>VELVET_STUDIO_ID=[VELVET_STUDIO_ID]</MultiStringValue>
+     <MultiStringValue>VELVET_HEARTBEAT_SECONDS=[VELVET_HEARTBEAT_SECONDS]</MultiStringValue>
+     <MultiStringValue>VELVET_LOG_DIR=[VELVET_LOG_DIR]</MultiStringValue>
+    </RegistryValue>
+   </Component>
    <Component Id="DesktopComponent" Guid="7AC690E7-B8E6-477D-962B-8F63C856DBD6"><File Id="DesktopExe" Source="$(DesktopExe)" KeyPath="yes"/></Component>
   </Directory></StandardDirectory>
+  <StandardDirectory Id="CommonAppDataFolder"><Directory Id="VelvetCommonData" Name="VELVET Agent"><Directory Id="VelvetLogs" Name="logs">
+   <Component Id="LogDirectoryComponent" Guid="C3DA4037-0472-403C-9A55-3D1542071A9E" Permanent="yes">
+    <CreateFolder>
+     <util:PermissionEx User="NT AUTHORITY\LocalService" GenericRead="yes" CreateFile="yes" Write="yes"/>
+    </CreateFolder>
+   </Component>
+  </Directory></Directory></StandardDirectory>
   <StandardDirectory Id="ProgramMenuFolder"><Directory Id="MenuFolder" Name="VELVET Agent"><Component Id="Menu" Guid="D21A2F94-145A-4F83-8CA1-44012DE4E296"><Shortcut Id="DesktopShortcut" Name="VELVET Agent" Target="[#DesktopExe]" WorkingDirectory="INSTALLFOLDER"/><RemoveFolder Id="RemoveMenu" On="uninstall"/><RegistryValue Root="HKLM" Key="Software\VelvetAgent" Name="Installed" Type="integer" Value="1" KeyPath="yes"/></Component></Directory></StandardDirectory>
-  <Feature Id="Agent" Title="VELVET Agent" Level="1"><ComponentRef Id="ServiceComponent"/><ComponentRef Id="DesktopComponent"/><ComponentRef Id="Menu"/></Feature>
+  <Feature Id="Agent" Title="VELVET Agent" Level="1"><ComponentRef Id="ServiceComponent"/><ComponentRef Id="ServiceEnvironmentComponent"/><ComponentRef Id="DesktopComponent"/><ComponentRef Id="LogDirectoryComponent"/><ComponentRef Id="Menu"/></Feature>
  </Package>
 </Wix>

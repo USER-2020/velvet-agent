@@ -105,13 +105,13 @@ export async function request<T>(
     operation,
     token: token ?? null,
   });
-  if (
-    !record(response) ||
-    response.Version !== 1 ||
-    response.Success !== true ||
-    !guard(response.Data)
-  )
+  if (!record(response) || response.Version !== 1)
     throw Error('Respuesta del servicio no válida');
+  if (response.Success !== true) {
+    const message = typeof response.Error === 'string' ? response.Error : null;
+    throw Error(message || 'El servicio rechazó la operación');
+  }
+  if (!guard(response.Data)) throw Error('Respuesta del servicio no válida');
   return response.Data;
 }
 export async function enroll(token: string) {
