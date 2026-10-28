@@ -1,15 +1,21 @@
 name: CI
+
 on:
   pull_request:
     branches: [main]
+
 permissions:
   contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  verify:
-    strategy:
-      matrix:
-        os: [windows-latest]
-    runs-on: ${{ matrix.os }}
+  verify-dotnet:
+    name: verify (.NET)
+    runs-on: windows-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -20,6 +26,21 @@ jobs:
           path: ~/.nuget/packages
           key: windows-nuget-${{ hashFiles('**/*.csproj', '**/packages.lock.json') }}
           restore-keys: windows-nuget-
+      - run: dotnet restore
+      - run: dotnet build --no-restore --configuration Release
+      - run: dotnet test --no-build --configuration Release --logger trx
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-windows-dotnet
+          path: tests/**/TestResults/*.trx
+
+  verify-desktop:
+    name: verify (Desktop)
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -36,14 +57,11 @@ jobs:
             apps/desktop/src-tauri/target
           key: windows-cargo-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
           restore-keys: windows-cargo-
-      - run: dotnet restore
-      - run: dotnet build --no-restore --configuration Release
-      - run: dotnet test --no-build --configuration Release --logger trx
-      - run: npm ci
+      - run: npm ci --prefer-offline
         working-directory: apps/desktop
       - run: npm run format:check
         working-directory: apps/desktop
-      - run: npm test
+      - run: npm test -- --run
         working-directory: apps/desktop
       - run: npm run check
         working-directory: apps/desktop
@@ -51,8 +69,3 @@ jobs:
         working-directory: apps/desktop/src-tauri
       - run: npm run tauri build -- --no-bundle
         working-directory: apps/desktop
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: test-results-${{ matrix.os }}
-          path: tests/**/TestResults/*.trx

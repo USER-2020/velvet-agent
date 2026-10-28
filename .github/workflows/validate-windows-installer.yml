@@ -45,7 +45,7 @@ jobs:
           restore-keys: windows-installer-cargo-
 
       - name: Restore .NET dependencies
-        run: dotnet restore
+        run: dotnet restore -r win-x64
 
       - name: Publish Windows service
         run: dotnet publish src/VelvetAgent.Service -c Release -r win-x64 --self-contained true --no-restore -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -o artifacts/service
